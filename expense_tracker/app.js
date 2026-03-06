@@ -57,6 +57,15 @@ function getMonthTx() {
   });
 }
 
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // ── Toast ────────────────────────────────────────────────────
 function toast(msg, type = 'success') {
   const el = document.createElement('div');
@@ -117,14 +126,6 @@ function renderDashboard() {
     : '<li class="empty-state"><i class="fa-solid fa-receipt"></i><p>No transactions yet</p></li>';
 
   renderCategoryChart(mTx);
-}
-
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 function txItemHTML(t, showDel = true) {
