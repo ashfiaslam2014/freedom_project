@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,6 +12,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
   <!-- Sidebar -->
@@ -111,7 +113,9 @@
             <a href="#" class="see-all" data-view="transactions">See all</a>
           </div>
           <ul id="recent-list" class="transaction-list">
-            <li class="empty-state"><i class="fa-solid fa-receipt"></i><p>No transactions yet</p></li>
+            <li class="empty-state"><i class="fa-solid fa-receipt"></i>
+              <p>No transactions yet</p>
+            </li>
           </ul>
         </div>
         <div class="panel chart-panel">
@@ -141,10 +145,14 @@
         <div class="search-box">
           <i class="fa-solid fa-magnifying-glass"></i>
           <input type="text" id="search-input" placeholder="Search transactions...">
+          <button id="search-clear" class="search-clear-btn" style="display: none;"><i
+              class="fa-solid fa-xmark"></i></button>
         </div>
       </div>
       <div id="transactions-container">
-        <div class="empty-state large"><i class="fa-solid fa-receipt"></i><p>No transactions found</p></div>
+        <div class="empty-state large"><i class="fa-solid fa-receipt"></i>
+          <p>No transactions found</p>
+        </div>
       </div>
     </section>
 
@@ -158,11 +166,15 @@
     <section class="view" id="view-reports">
       <div class="reports-grid">
         <div class="panel">
-          <div class="panel-header"><h3>Last 6 Months Overview</h3></div>
+          <div class="panel-header">
+            <h3>Last 6 Months Overview</h3>
+          </div>
           <div class="chart-wrapper tall"><canvas id="monthly-chart"></canvas></div>
         </div>
         <div class="panel">
-          <div class="panel-header"><h3>Income vs Expenses</h3></div>
+          <div class="panel-header">
+            <h3>Income vs Expenses</h3>
+          </div>
           <div class="chart-wrapper tall"><canvas id="comparison-chart"></canvas></div>
         </div>
       </div>
@@ -191,7 +203,7 @@
       </div>
       <div class="modal-form-group">
         <label>Description</label>
-        <input type="text" id="modal-desc" placeholder="What was this for?">
+        <input type="text" id="modal-desc" placeholder="What was this for?" maxlength="80">
       </div>
       <div class="modal-form-group">
         <label>Category</label>
@@ -207,4 +219,5 @@
 
   <script src="app.js"></script>
 </body>
+
 </html>
