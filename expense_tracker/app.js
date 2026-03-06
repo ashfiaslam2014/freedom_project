@@ -136,7 +136,7 @@ function renderDashboard() {
 
 function txItemHTML(t, showDel = true) {
   const cat  = CATEGORIES[t.category] || CATEGORIES.other;
-  const sign = t.type === 'income' ? '+' : '-';
+  const signedAmount = t.type === 'income' ? t.amount : -t.amount;
   const shortDate = new Date(t.date + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' });
   return `
     <li class="transaction-item">
@@ -148,7 +148,7 @@ function txItemHTML(t, showDel = true) {
         <div class="tx-category">${cat.name}</div>
       </div>
       <div class="tx-right">
-        <div class="tx-amount ${t.type}">${sign}${fmt(t.amount)}</div>
+        <div class="tx-amount ${t.type}">${t.type === 'income' ? '+' : ''}${fmt(signedAmount)}</div>
         <div class="tx-date-label">${shortDate}</div>
       </div>
       ${showDel ? `<button class="tx-delete" onclick="deleteTx('${t.id}')"><i class="fa-solid fa-trash"></i></button>` : ''}
