@@ -339,21 +339,39 @@ function renderReports() {
   const mIncome  = mTx.filter(t => t.type === 'income') .reduce((a, t) => a + t.amount, 0);
   const mExpense = mTx.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
 
-  if (comparisonChart) comparisonChart.destroy();
-  comparisonChart = new Chart(document.getElementById('comparison-chart'), {
-    type: 'doughnut',
-    data: {
-      labels: ['Income', 'Expenses'],
-      datasets: [{ data: [mIncome || 0.01, mExpense || 0.01], backgroundColor: ['rgba(16,185,129,0.8)', 'rgba(244,63,94,0.8)'], borderWidth: 0 }],
-    },
-    options: {
-      cutout: '65%', responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 12 } } },
-        tooltip: { callbacks: { label: ctx => ' ' + fmt(ctx.raw) } },
+  if (comparisonChart) { comparisonChart.destroy(); comparisonChart = null; }
+
+  const compCanvas = document.getElementById('comparison-chart');
+  if (!mIncome && !mExpense) {
+    compCanvas.style.display = 'none';
+    let ph = document.getElementById('comparison-placeholder');
+    if (!ph) {
+      ph = document.createElement('div');
+      ph.id = 'comparison-placeholder';
+      ph.className = 'chart-placeholder';
+      ph.innerHTML = '<i class="fa-solid fa-chart-pie"></i><p>No data for this month</p>';
+      compCanvas.parentElement.appendChild(ph);
+    }
+    ph.style.display = 'flex';
+  } else {
+    const ph2 = document.getElementById('comparison-placeholder');
+    if (ph2) ph2.style.display = 'none';
+    compCanvas.style.display = 'block';
+    comparisonChart = new Chart(compCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: ['Income', 'Expenses'],
+        datasets: [{ data: [mIncome, mExpense], backgroundColor: ['rgba(16,185,129,0.8)', 'rgba(244,63,94,0.8)'], borderWidth: 0 }],
       },
-    },
-  });
+      options: {
+        cutout: '65%', responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 12 } } },
+          tooltip: { callbacks: { label: ctx => ' ' + fmt(ctx.raw) } },
+        },
+      },
+    });
+  }
 }
 
 // ── Modal ─────────────────────────────────────────────────────
