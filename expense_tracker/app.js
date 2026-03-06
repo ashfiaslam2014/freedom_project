@@ -1,136 +1,470 @@
-const balance = document.getElementById('balance');
-const money_plus = document.getElementById('money-plus');
-const money_minus = document.getElementById('money-minus');
-const list = document.getElementById('list');
-const form = document.getElementById('form');
-const text = document.getElementById('text');
-const amount = document.getElementById('amount');
+// ── Categories ──────────────────────────────────────────────
+const CATEGORIES = {
+  food:          { name: 'Food',          icon: 'fa-utensils',           color: '#f59e0b', bg: 'rgba(245,158,11,0.15)'  },
+  transport:     { name: 'Transport',     icon: 'fa-car',                color: '#3b82f6', bg: 'rgba(59,130,246,0.15)'  },
+  shopping:      { name: 'Shopping',      icon: 'fa-bag-shopping',       color: '#ec4899', bg: 'rgba(236,72,153,0.15)'  },
+  entertainment: { name: 'Fun',           icon: 'fa-film',               color: '#8b5cf6', bg: 'rgba(139,92,246,0.15)'  },
+  health:        { name: 'Health',        icon: 'fa-heart-pulse',        color: '#ef4444', bg: 'rgba(239,68,68,0.15)'   },
+  bills:         { name: 'Bills',         icon: 'fa-file-invoice-dollar',color: '#64748b', bg: 'rgba(100,116,139,0.15)' },
+  education:     { name: 'Education',     icon: 'fa-graduation-cap',     color: '#06b6d4', bg: 'rgba(6,182,212,0.15)'   },
+  salary:        { name: 'Salary',        icon: 'fa-briefcase',          color: '#10b981', bg: 'rgba(16,185,129,0.15)'  },
+  investment:    { name: 'Invest',        icon: 'fa-chart-line',         color: '#6366f1', bg: 'rgba(99,102,241,0.15)'  },
+  other:         { name: 'Other',         icon: 'fa-ellipsis',           color: '#94a3b8', bg: 'rgba(148,163,184,0.15)' },
+};
 
-const localStorageTransactions = JSON.parse(
-    localStorage.getItem('transactions')
-);
+const EXPENSE_CATS = ['food','transport','shopping','entertainment','health','bills','education','other'];
+const INCOME_CATS  = ['salary','investment','other'];
 
-let transactions =
-    localStorage.getItem('transactions') !== null ? localStorageTransactions : [];
+// ── State ────────────────────────────────────────────────────
+let transactions = JSON.parse(localStorage.getItem('mm_transactions') || '[]');
+let budgets      = JSON.parse(localStorage.getItem('mm_budgets')      || '{}');
+let currentFilter = 'all';
+let searchQuery   = '';
+let selectedType  = 'expense';
+let selectedCat   = 'food';
+let viewYear  = new Date().getFullYear();
+let viewMonth = new Date().getMonth();
 
-// Add transaction
-function addTransaction(e) {
-    e.preventDefault();
+let categoryChart, monthlyChart, comparisonChart;
 
-    if (text.value.trim() === '' || amount.value.trim() === '') {
-        alert('Please add a text and amount');
-    } else {
-        const transaction = {
-            id: generateID(),
-            text: text.value,
-            amount: +amount.value
-        };
+// ── Persistence ──────────────────────────────────────────────
+function saveTx()  { localStorage.setItem('mm_transactions', JSON.stringify(transactions)); }
+function saveBudg() { localStorage.setItem('mm_budgets',      JSON.stringify(budgets)); }
 
-        transactions.push(transaction);
-
-        addTransactionDOM(transaction);
-
-        updateValues();
-
-        updateLocalStorage();
-
-        text.value = '';
-        amount.value = '';
-        text.focus();
-    }
+// ── Helpers ──────────────────────────────────────────────────
+function fmt(n) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-// Generate random ID
-function generateID() {
-    return Math.floor(Math.random() * 100000000);
+function fmtDateLabel(dateStr) {
+  const today = new Date().toISOString().split('T')[0];
+  const yest  = new Date(Date.now() - 864e5).toISOString().split('T')[0];
+  if (dateStr === today) return 'Today';
+  if (dateStr === yest)  return 'Yesterday';
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
 }
 
-// Format money
-function formatMoney(number) {
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 2
-    }).format(number);
+function monthName(m, y) {
+  return new Date(y, m, 1).toLocaleDateString('en-US', { month:'long', year:'numeric' });
 }
 
-// Add transactions to DOM list
-function addTransactionDOM(transaction) {
-    // Get sign
-    const sign = transaction.amount < 0 ? '-' : '+';
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 
-    const item = document.createElement('li');
-
-    // Add class based on value
-    item.classList.add(transaction.amount < 0 ? 'minus' : 'plus');
-
-    item.innerHTML = `
-    <span class="desc">${transaction.text}</span> 
-    <span class="amt">${sign}${formatMoney(Math.abs(transaction.amount))}</span>
-    <button class="delete-btn" onclick="removeTransaction(${transaction.id})"><i class="fa-solid fa-trash"></i></button>
-  `;
-
-    list.appendChild(item);
+function getMonthTx() {
+  return transactions.filter(t => {
+    const d = new Date(t.date + 'T00:00:00');
+    return d.getFullYear() === viewYear && d.getMonth() === viewMonth;
+  });
 }
 
-// Update the balance, income and expense
-function updateValues() {
-    const amounts = transactions.map(transaction => transaction.amount);
+// ── Toast ────────────────────────────────────────────────────
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.classList.add('show'), 10);
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 2500);
+}
 
-    const total = amounts.reduce((acc, item) => (acc += item), 0);
+// ── Navigation ───────────────────────────────────────────────
+function switchView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-item[data-view]').forEach(n => n.classList.remove('active'));
 
-    const income = amounts
-        .filter(item => item > 0)
-        .reduce((acc, item) => (acc += item), 0);
+  document.getElementById('view-' + name)?.classList.add('active');
+  document.querySelector(`.nav-item[data-view="${name}"]`)?.classList.add('active');
 
-    const expense = (
-        amounts.filter(item => item < 0).reduce((acc, item) => (acc += item), 0) *
-        -1
+  const meta = {
+    dashboard:    ['Dashboard',    "Here's your financial overview"],
+    transactions: ['Transactions', 'All your transactions'],
+    budget:       ['Budget',       'Monthly spending limits'],
+    reports:      ['Reports',      'Insights and analytics'],
+  };
+  const [title, sub] = meta[name] || [];
+  document.getElementById('view-title').textContent    = title || '';
+  document.getElementById('view-subtitle').textContent = sub   || '';
+
+  if (name === 'dashboard')    renderDashboard();
+  if (name === 'transactions') renderTransactions();
+  if (name === 'budget')       renderBudget();
+  if (name === 'reports')      renderReports();
+}
+
+// ── Dashboard ────────────────────────────────────────────────
+function renderDashboard() {
+  const mTx = getMonthTx();
+  const allTx = transactions;
+
+  const totalBal   = allTx.reduce((a, t) => a + (t.type === 'income' ? t.amount : -t.amount), 0);
+  const mIncome    = mTx.filter(t => t.type === 'income') .reduce((a, t) => a + t.amount, 0);
+  const mExpense   = mTx.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
+  const netSavings = mIncome - mExpense;
+
+  document.getElementById('total-balance').textContent  = fmt(totalBal);
+  document.getElementById('monthly-income').textContent  = fmt(mIncome);
+  document.getElementById('monthly-expense').textContent = fmt(mExpense);
+
+  const savEl = document.getElementById('net-savings');
+  savEl.textContent = fmt(netSavings);
+  savEl.className   = 'card-amount ' + (netSavings >= 0 ? 'savings-amount' : 'expense-amount');
+
+  // Recent transactions (latest 5)
+  const recent = [...allTx].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+  const rl = document.getElementById('recent-list');
+  rl.innerHTML = recent.length
+    ? recent.map(t => txItemHTML(t, false)).join('')
+    : '<li class="empty-state"><i class="fa-solid fa-receipt"></i><p>No transactions yet</p></li>';
+
+  renderCategoryChart(mTx);
+}
+
+function txItemHTML(t, showDel = true) {
+  const cat  = CATEGORIES[t.category] || CATEGORIES.other;
+  const sign = t.type === 'income' ? '+' : '-';
+  const shortDate = new Date(t.date + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' });
+  return `
+    <li class="transaction-item">
+      <div class="tx-icon" style="background:${cat.bg};color:${cat.color}">
+        <i class="fa-solid ${cat.icon}"></i>
+      </div>
+      <div class="tx-info">
+        <div class="tx-desc">${t.description}</div>
+        <div class="tx-category">${cat.name}</div>
+      </div>
+      <div class="tx-right">
+        <div class="tx-amount ${t.type}">${sign}${fmt(t.amount)}</div>
+        <div class="tx-date-label">${shortDate}</div>
+      </div>
+      ${showDel ? `<button class="tx-delete" onclick="deleteTx('${t.id}')"><i class="fa-solid fa-trash"></i></button>` : ''}
+    </li>`;
+}
+
+function renderCategoryChart(mTx) {
+  const totals = {};
+  mTx.filter(t => t.type === 'expense').forEach(t => {
+    totals[t.category] = (totals[t.category] || 0) + t.amount;
+  });
+
+  const canvas = document.getElementById('category-chart');
+  const ph     = document.getElementById('chart-placeholder');
+  const legend = document.getElementById('category-legend');
+
+  if (!Object.keys(totals).length) {
+    canvas.style.display = 'none';
+    ph.style.display = 'flex';
+    legend.innerHTML = '';
+    if (categoryChart) { categoryChart.destroy(); categoryChart = null; }
+    return;
+  }
+
+  canvas.style.display = 'block';
+  ph.style.display = 'none';
+
+  const labels = Object.keys(totals).map(k => CATEGORIES[k]?.name || k);
+  const data   = Object.values(totals);
+  const colors = Object.keys(totals).map(k => CATEGORIES[k]?.color || '#94a3b8');
+
+  if (categoryChart) categoryChart.destroy();
+  categoryChart = new Chart(canvas, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0, hoverOffset: 6 }] },
+    options: {
+      cutout: '72%',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ' ' + fmt(ctx.raw) } },
+      },
+      responsive: true, maintainAspectRatio: false,
+    },
+  });
+
+  legend.innerHTML = Object.entries(totals)
+    .sort((a, b) => b[1] - a[1]).slice(0, 5)
+    .map(([k, v]) => {
+      const c = CATEGORIES[k] || CATEGORIES.other;
+      return `<li class="legend-item">
+        <div class="legend-dot" style="background:${c.color}"></div>
+        <span class="legend-name">${c.name}</span>
+        <span class="legend-amount">${fmt(v)}</span>
+      </li>`;
+    }).join('');
+}
+
+// ── Transactions View ─────────────────────────────────────────
+function renderTransactions() {
+  let list = [...transactions];
+
+  if (currentFilter === 'income')  list = list.filter(t => t.type === 'income');
+  if (currentFilter === 'expense') list = list.filter(t => t.type === 'expense');
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    list = list.filter(t =>
+      t.description.toLowerCase().includes(q) ||
+      (CATEGORIES[t.category]?.name || '').toLowerCase().includes(q)
     );
+  }
 
-    balance.innerText = formatMoney(total);
-    money_plus.innerText = `+${formatMoney(Math.abs(income))}`;
-    money_minus.innerText = `-${formatMoney(Math.abs(expense))}`;
+  const container = document.getElementById('transactions-container');
+  if (!list.length) {
+    container.innerHTML = '<div class="empty-state large"><i class="fa-solid fa-receipt"></i><p>No transactions found</p></div>';
+    return;
+  }
 
-    // Show empty state if no transactions
-    if (transactions.length === 0) {
-        list.innerHTML = '<li class="empty-state" style="border:none; box-shadow:none; justify-content:center; background:transparent;">No transactions yet. Add one above!</li>';
-    } else {
-        // Remove empty state if it's the only child and it's mostly empty text
-        const firstChild = list.firstElementChild;
-        if (firstChild && firstChild.classList.contains('empty-state')) {
-            list.innerHTML = '';
-            transactions.forEach(addTransactionDOM);
-        }
+  list.sort((a, b) => new Date(b.date) - new Date(a.date));
+  const groups = {};
+  list.forEach(t => { (groups[t.date] = groups[t.date] || []).push(t); });
+
+  container.innerHTML = Object.entries(groups).map(([date, txs]) => `
+    <div class="date-group">
+      <div class="date-group-label">${fmtDateLabel(date)}</div>
+      <div class="date-group-panel">
+        <ul class="transaction-list">${txs.map(t => txItemHTML(t, true)).join('')}</ul>
+      </div>
+    </div>`).join('');
+}
+
+function deleteTx(id) {
+  transactions = transactions.filter(t => t.id !== id);
+  saveTx();
+  renderDashboard();
+  renderTransactions();
+  toast('Transaction deleted');
+}
+
+// ── Budget View ───────────────────────────────────────────────
+function renderBudget() {
+  const mTx = getMonthTx();
+  document.getElementById('budget-grid').innerHTML = EXPENSE_CATS.map(key => {
+    const cat   = CATEGORIES[key];
+    const spent = mTx.filter(t => t.type === 'expense' && t.category === key).reduce((a, t) => a + t.amount, 0);
+    const limit = budgets[key] || 0;
+    const pct   = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0;
+    const over  = limit > 0 && spent > limit;
+    const fillColor = over ? '#ef4444' : (pct > 75 ? '#f59e0b' : cat.color);
+    const status = over ? '⚠ Over budget' : pct > 75 ? '⚡ Almost there' : limit > 0 ? 'On track' : 'No limit set';
+    return `
+      <div class="budget-card">
+        <div class="budget-card-top">
+          <div class="budget-cat-icon" style="background:${cat.bg};color:${cat.color}">
+            <i class="fa-solid ${cat.icon}"></i>
+          </div>
+          <div class="budget-info">
+            <div class="budget-cat-name">${cat.name}</div>
+            <div class="budget-amounts">${fmt(spent)}${limit > 0 ? ' / ' + fmt(limit) : ''}</div>
+          </div>
+          <button class="budget-set-btn" onclick="setBudget('${key}')">Set Limit</button>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:${pct}%;background:${fillColor}"></div>
+        </div>
+        <div class="budget-footer">
+          <span>${status}</span>
+          <span>${limit > 0 ? Math.round(pct) + '%' : ''}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function setBudget(key) {
+  const cat = CATEGORIES[key];
+  const val = prompt(`Set monthly budget for ${cat.name} ($):`, budgets[key] || '');
+  if (val !== null) {
+    const n = parseFloat(val);
+    if (!isNaN(n) && n >= 0) {
+      budgets[key] = n;
+      saveBudg();
+      renderBudget();
+      toast(`Budget updated for ${cat.name}`);
     }
+  }
 }
 
-// Remove transaction by ID
-function removeTransaction(id) {
-    transactions = transactions.filter(transaction => transaction.id !== id);
+// ── Reports View ──────────────────────────────────────────────
+function renderReports() {
+  // Monthly bar chart (last 6 months)
+  const months = [], incomes = [], expenses = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(viewYear, viewMonth - i, 1);
+    const y = d.getFullYear(), m = d.getMonth();
+    months.push(d.toLocaleDateString('en-US', { month: 'short' }));
+    const mt = transactions.filter(t => {
+      const td = new Date(t.date + 'T00:00:00');
+      return td.getFullYear() === y && td.getMonth() === m;
+    });
+    incomes.push(mt.filter(t => t.type === 'income') .reduce((a, t) => a + t.amount, 0));
+    expenses.push(mt.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0));
+  }
 
-    updateLocalStorage();
+  if (monthlyChart) monthlyChart.destroy();
+  monthlyChart = new Chart(document.getElementById('monthly-chart'), {
+    type: 'bar',
+    data: {
+      labels: months,
+      datasets: [
+        { label: 'Income',   data: incomes,   backgroundColor: 'rgba(16,185,129,0.75)', borderRadius: 6 },
+        { label: 'Expenses', data: expenses,  backgroundColor: 'rgba(244,63,94,0.75)',  borderRadius: 6 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 12 } } },
+        tooltip: { callbacks: { label: ctx => ' ' + fmt(ctx.raw) } },
+      },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', callback: v => '$' + v } },
+      },
+    },
+  });
 
-    init();
+  // Comparison donut
+  const mTx     = getMonthTx();
+  const mIncome  = mTx.filter(t => t.type === 'income') .reduce((a, t) => a + t.amount, 0);
+  const mExpense = mTx.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
+
+  if (comparisonChart) comparisonChart.destroy();
+  comparisonChart = new Chart(document.getElementById('comparison-chart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Income', 'Expenses'],
+      datasets: [{ data: [mIncome || 0.01, mExpense || 0.01], backgroundColor: ['rgba(16,185,129,0.8)', 'rgba(244,63,94,0.8)'], borderWidth: 0 }],
+    },
+    options: {
+      cutout: '65%', responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 12 } } },
+        tooltip: { callbacks: { label: ctx => ' ' + fmt(ctx.raw) } },
+      },
+    },
+  });
 }
 
-// Update local storage transactions
-function updateLocalStorage() {
-    localStorage.setItem('transactions', JSON.stringify(transactions));
+// ── Modal ─────────────────────────────────────────────────────
+const overlay = document.getElementById('modal-overlay');
+
+function openModal() {
+  overlay.classList.add('active');
+  document.getElementById('modal-date').value   = new Date().toISOString().split('T')[0];
+  document.getElementById('modal-amount').value = '';
+  document.getElementById('modal-desc').value   = '';
+  applyType('expense');
+  setTimeout(() => document.getElementById('modal-amount').focus(), 120);
 }
 
-// Init app
-function init() {
-    list.innerHTML = '';
+function closeModal() { overlay.classList.remove('active'); }
 
-    if (transactions.length === 0) {
-        updateValues(); // Will render empty state
-    } else {
-        transactions.forEach(addTransactionDOM);
-        updateValues();
-    }
+function applyType(type) {
+  selectedType = type;
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.type-btn[data-type="${type}"]`).classList.add('active');
+
+  document.querySelectorAll('.category-option').forEach(el => {
+    const k = el.dataset.key;
+    const visible = type === 'income' ? INCOME_CATS.includes(k) : EXPENSE_CATS.includes(k);
+    el.style.display = visible ? '' : 'none';
+  });
+
+  const defaultCat = type === 'income' ? 'salary' : 'food';
+  selectCat(defaultCat);
 }
 
-init();
+function selectCat(key) {
+  selectedCat = key;
+  document.querySelectorAll('.category-option').forEach(el => el.classList.remove('selected'));
+  document.querySelector(`.category-option[data-key="${key}"]`)?.classList.add('selected');
+}
 
-form.addEventListener('submit', addTransaction);
+function buildCategoryGrid() {
+  document.getElementById('category-grid').innerHTML = Object.entries(CATEGORIES).map(([k, c]) => `
+    <div class="category-option" data-key="${k}"
+         style="--sel-color:${c.color};--sel-bg:${c.bg}"
+         onclick="selectCat('${k}')">
+      <div class="cat-icon" style="background:${c.bg};color:${c.color}">
+        <i class="fa-solid ${c.icon}"></i>
+      </div>
+      <span>${c.name}</span>
+    </div>`).join('');
+}
+
+function submitTransaction() {
+  const amount = parseFloat(document.getElementById('modal-amount').value);
+  const desc   = document.getElementById('modal-desc').value.trim();
+  const date   = document.getElementById('modal-date').value;
+
+  if (!amount || amount <= 0) { toast('Enter a valid amount', 'error'); return; }
+  if (!desc)                  { toast('Enter a description', 'error'); return; }
+  if (!date)                  { toast('Select a date', 'error'); return; }
+
+  transactions.unshift({ id: uid(), description: desc, amount, type: selectedType, category: selectedCat, date });
+  saveTx();
+  closeModal();
+  toast('Transaction added!');
+  renderDashboard();
+  renderTransactions();
+}
+
+// ── Init ──────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Sidebar nav
+  document.querySelectorAll('.nav-item[data-view]').forEach(el =>
+    el.addEventListener('click', e => { e.preventDefault(); switchView(el.dataset.view); })
+  );
+
+  // "See all" link
+  document.querySelector('.see-all')?.addEventListener('click', e => { e.preventDefault(); switchView('transactions'); });
+
+  // Modal open/close
+  document.getElementById('open-modal').addEventListener('click', openModal);
+  document.getElementById('close-modal').addEventListener('click', closeModal);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+  document.getElementById('modal-submit').addEventListener('click', submitTransaction);
+
+  // Type toggle
+  document.querySelectorAll('.type-btn').forEach(b =>
+    b.addEventListener('click', () => applyType(b.dataset.type))
+  );
+
+  // Filter tabs
+  document.querySelectorAll('.filter-tab').forEach(tab =>
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentFilter = tab.dataset.filter;
+      renderTransactions();
+    })
+  );
+
+  // Search
+  document.getElementById('search-input').addEventListener('input', e => {
+    searchQuery = e.target.value;
+    renderTransactions();
+  });
+
+  // Month navigation
+  document.getElementById('prev-month').addEventListener('click', () => {
+    viewMonth--;
+    if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+    document.getElementById('current-month').textContent = monthName(viewMonth, viewYear);
+    rerenderActive();
+  });
+  document.getElementById('next-month').addEventListener('click', () => {
+    viewMonth++;
+    if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+    document.getElementById('current-month').textContent = monthName(viewMonth, viewYear);
+    rerenderActive();
+  });
+
+  buildCategoryGrid();
+  document.getElementById('current-month').textContent = monthName(viewMonth, viewYear);
+  switchView('dashboard');
+});
+
+function rerenderActive() {
+  const active = document.querySelector('.view.active')?.id?.replace('view-', '');
+  if (active === 'dashboard')    renderDashboard();
+  if (active === 'transactions') renderTransactions();
+  if (active === 'budget')       renderBudget();
+  if (active === 'reports')      renderReports();
+}
