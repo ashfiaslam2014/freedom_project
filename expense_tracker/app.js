@@ -16,8 +16,14 @@ const EXPENSE_CATS = ['food','transport','shopping','entertainment','health','bi
 const INCOME_CATS  = ['salary','investment','other'];
 
 // ── State ────────────────────────────────────────────────────
-let transactions = JSON.parse(localStorage.getItem('mm_transactions') || '[]');
-let budgets      = JSON.parse(localStorage.getItem('mm_budgets')      || '{}');
+let transactions = (() => {
+  try { return JSON.parse(localStorage.getItem('mm_transactions') || '[]'); }
+  catch { localStorage.removeItem('mm_transactions'); return []; }
+})();
+let budgets = (() => {
+  try { return JSON.parse(localStorage.getItem('mm_budgets') || '{}'); }
+  catch { localStorage.removeItem('mm_budgets'); return {}; }
+})();
 let currentFilter = 'all';
 let searchQuery   = '';
 let selectedType  = 'expense';
