@@ -119,6 +119,14 @@ function renderDashboard() {
   renderCategoryChart(mTx);
 }
 
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function txItemHTML(t, showDel = true) {
   const cat  = CATEGORIES[t.category] || CATEGORIES.other;
   const sign = t.type === 'income' ? '+' : '-';
@@ -129,7 +137,7 @@ function txItemHTML(t, showDel = true) {
         <i class="fa-solid ${cat.icon}"></i>
       </div>
       <div class="tx-info">
-        <div class="tx-desc">${t.description}</div>
+        <div class="tx-desc">${escapeHtml(t.description)}</div>
         <div class="tx-category">${cat.name}</div>
       </div>
       <div class="tx-right">
