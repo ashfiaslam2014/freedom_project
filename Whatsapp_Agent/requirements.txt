@@ -1,0 +1,6 @@
+Flask
+twilio
+langchain
+langchain-google-genai
+langchain-community
+SQLAlchemy
