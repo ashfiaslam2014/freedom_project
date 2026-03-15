@@ -30,6 +30,9 @@ let selectedType = 'expense';
 let selectedCat = 'food';
 let viewYear = new Date().getFullYear();
 let viewMonth = new Date().getMonth();
+let currentCurrency = localStorage.getItem('mm_currency') || 'USD';
+let dateRangeStart = '';
+let dateRangeEnd = '';
 
 let categoryChart, monthlyChart, comparisonChart;
 
@@ -37,9 +40,56 @@ let categoryChart, monthlyChart, comparisonChart;
 function saveTx() { localStorage.setItem('mm_transactions', JSON.stringify(transactions)); }
 function saveBudg() { localStorage.setItem('mm_budgets', JSON.stringify(budgets)); }
 
+// ── Currencies ────────────────────────────────────────────────
+const CURRENCIES = {
+  USD: { code: 'USD', locale: 'en-US', symbol: '$', name: 'US Dollar' },
+  EUR: { code: 'EUR', locale: 'de-DE', symbol: '€', name: 'Euro' },
+  GBP: { code: 'GBP', locale: 'en-GB', symbol: '£', name: 'British Pound' },
+  JPY: { code: 'JPY', locale: 'ja-JP', symbol: '¥', name: 'Japanese Yen' },
+  INR: { code: 'INR', locale: 'en-IN', symbol: '₹', name: 'Indian Rupee' },
+  CAD: { code: 'CAD', locale: 'en-CA', symbol: 'C$', name: 'Canadian Dollar' },
+  AUD: { code: 'AUD', locale: 'en-AU', symbol: 'A$', name: 'Australian Dollar' },
+  CHF: { code: 'CHF', locale: 'de-CH', symbol: 'Fr', name: 'Swiss Franc' },
+  CNY: { code: 'CNY', locale: 'zh-CN', symbol: '¥', name: 'Chinese Yuan' },
+  BRL: { code: 'BRL', locale: 'pt-BR', symbol: 'R$', name: 'Brazilian Real' },
+  MXN: { code: 'MXN', locale: 'es-MX', symbol: '$', name: 'Mexican Peso' },
+  KRW: { code: 'KRW', locale: 'ko-KR', symbol: '₩', name: 'Korean Won' },
+  SGD: { code: 'SGD', locale: 'en-SG', symbol: 'S$', name: 'Singapore Dollar' },
+  AED: { code: 'AED', locale: 'ar-AE', symbol: 'د.إ', name: 'UAE Dirham' },
+  SAR: { code: 'SAR', locale: 'ar-SA', symbol: '﷼', name: 'Saudi Riyal' },
+  PKR: { code: 'PKR', locale: 'en-PK', symbol: '₨', name: 'Pakistani Rupee' },
+  BDT: { code: 'BDT', locale: 'bn-BD', symbol: '৳', name: 'Bangladeshi Taka' },
+};
+
 // ── Helpers ──────────────────────────────────────────────────
 function fmt(n) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+  const cur = CURRENCIES[currentCurrency] || CURRENCIES.USD;
+  return new Intl.NumberFormat(cur.locale, { style: 'currency', currency: cur.code }).format(n);
+}
+
+function getCurrencySymbol() {
+  return (CURRENCIES[currentCurrency] || CURRENCIES.USD).symbol;
+}
+
+function switchCurrency(code) {
+  if (!CURRENCIES[code]) return;
+  currentCurrency = code;
+  localStorage.setItem('mm_currency', code);
+  document.getElementById('amount-currency-symbol').textContent = getCurrencySymbol();
+  renderSettings();
+  rerenderActive();
+  toast(`Currency changed to ${CURRENCIES[code].name}`);
+}
+
+function renderSettings() {
+  const cur = currentCurrency;
+  document.getElementById('settings-currency-grid').innerHTML = Object.values(CURRENCIES).map(c => `
+    <button class="currency-option ${c.code === cur ? 'active' : ''}" onclick="switchCurrency('${c.code}')">
+      <span class="currency-symbol">${c.symbol}</span>
+      <span class="currency-code">${c.code}</span>
+      <span class="currency-name">${c.name}</span>
+    </button>
+  `).join('');
 }
 
 function fmtDateLabel(dateStr) {
@@ -76,6 +126,44 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+// ── CSV Export ───────────────────────────────────────────────
+function exportCSV() {
+  const list = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+  if (!list.length) { toast('No transactions to export', 'error'); return; }
+  const headers = ['Date', 'Description', 'Type', 'Category', 'Amount'];
+  const rows = list.map(t => [
+    t.date,
+    `"${t.description.replace(/"/g, '""')}"`,
+    t.type,
+    CATEGORIES[t.category]?.name || t.category,
+    t.type === 'expense' ? -t.amount : t.amount,
+  ]);
+  const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `moneyflow-transactions-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`Exported ${list.length} transactions`);
+}
+
+// ── Date Range ────────────────────────────────────────────────
+function applyDateRange() {
+  dateRangeStart = document.getElementById('date-from').value;
+  dateRangeEnd = document.getElementById('date-to').value;
+  renderTransactions();
+}
+
+function clearDateRange() {
+  dateRangeStart = '';
+  dateRangeEnd = '';
+  document.getElementById('date-from').value = '';
+  document.getElementById('date-to').value = '';
+  renderTransactions();
+}
+
 // ── Toast ────────────────────────────────────────────────────
 function toast(msg, type = 'success') {
   const el = document.createElement('div');
@@ -99,6 +187,7 @@ function switchView(name) {
     transactions: ['Transactions', 'All your transactions'],
     budget: ['Budget', 'Monthly spending limits'],
     reports: ['Reports', 'Insights and analytics'],
+    settings: ['Settings', 'App preferences'],
   };
   const [title, sub] = meta[name] || [];
   document.getElementById('view-title').textContent = title || '';
@@ -108,6 +197,7 @@ function switchView(name) {
   if (name === 'transactions') renderTransactions();
   if (name === 'budget') renderBudget();
   if (name === 'reports') renderReports();
+  if (name === 'settings') renderSettings();
 }
 
 // ── Dashboard ────────────────────────────────────────────────
@@ -212,7 +302,16 @@ function renderCategoryChart(mTx) {
 
 // ── Transactions View ─────────────────────────────────────────
 function renderTransactions() {
-  let list = [...getMonthTx()];
+  let list;
+  if (dateRangeStart || dateRangeEnd) {
+    list = transactions.filter(t => {
+      if (dateRangeStart && t.date < dateRangeStart) return false;
+      if (dateRangeEnd && t.date > dateRangeEnd) return false;
+      return true;
+    });
+  } else {
+    list = [...getMonthTx()];
+  }
 
   if (currentFilter === 'income') list = list.filter(t => t.type === 'income');
   if (currentFilter === 'expense') list = list.filter(t => t.type === 'expense');
@@ -521,6 +620,30 @@ document.addEventListener('DOMContentLoaded', () => {
     rerenderActive();
   });
 
+  // Theme support
+  const themeToggleBtn = document.getElementById('theme-toggle');
+  const themeIcon = themeToggleBtn.querySelector('i');
+
+  let currentTheme = localStorage.getItem('mm_theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  updateThemeIcon();
+
+  themeToggleBtn.addEventListener('click', () => {
+    currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    localStorage.setItem('mm_theme', currentTheme);
+    updateThemeIcon();
+  });
+
+  function updateThemeIcon() {
+    if (currentTheme === 'dark') {
+      themeIcon.className = 'fa-solid fa-moon';
+    } else {
+      themeIcon.className = 'fa-solid fa-sun';
+    }
+  }
+
+  document.getElementById('amount-currency-symbol').textContent = getCurrencySymbol();
   buildCategoryGrid();
   document.getElementById('current-month').textContent = monthName(viewMonth, viewYear);
   switchView('dashboard');
@@ -532,4 +655,5 @@ function rerenderActive() {
   if (active === 'transactions') renderTransactions();
   if (active === 'budget') renderBudget();
   if (active === 'reports') renderReports();
+  if (active === 'settings') renderSettings();
 }

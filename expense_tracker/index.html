@@ -5,6 +5,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MoneyFlow - Money Manager</title>
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MoneyFlow">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -16,27 +22,31 @@
 <body>
 
   <!-- Sidebar -->
-  <aside class="sidebar">
+  <aside class="sidebar" role="navigation" aria-label="Main navigation">
     <div class="sidebar-logo">
       <div class="logo-icon"><i class="fa-solid fa-wallet"></i></div>
       <span>MoneyFlow</span>
     </div>
     <nav class="sidebar-nav">
-      <a href="#" class="nav-item active" data-view="dashboard">
+      <a href="#" class="nav-item active" data-view="dashboard" aria-label="Dashboard">
         <i class="fa-solid fa-house"></i>
         <span>Dashboard</span>
       </a>
-      <a href="#" class="nav-item" data-view="transactions">
+      <a href="#" class="nav-item" data-view="transactions" aria-label="Transactions">
         <i class="fa-solid fa-list-ul"></i>
         <span>Transactions</span>
       </a>
-      <a href="#" class="nav-item" data-view="budget">
+      <a href="#" class="nav-item" data-view="budget" aria-label="Budget">
         <i class="fa-solid fa-bullseye"></i>
         <span>Budget</span>
       </a>
-      <a href="#" class="nav-item" data-view="reports">
+      <a href="#" class="nav-item" data-view="reports" aria-label="Reports">
         <i class="fa-solid fa-chart-bar"></i>
         <span>Reports</span>
+      </a>
+      <a href="#" class="nav-item" data-view="settings" aria-label="Settings">
+        <i class="fa-solid fa-gear"></i>
+        <span>Settings</span>
       </a>
     </nav>
     <div class="sidebar-footer">
@@ -48,7 +58,7 @@
   </aside>
 
   <!-- Main Content -->
-  <main class="main-content">
+  <main class="main-content" role="main">
 
     <!-- Top Header -->
     <header class="top-header">
@@ -57,10 +67,13 @@
         <p id="view-subtitle">Here's your financial overview</p>
       </div>
       <div class="header-right">
+        <button id="theme-toggle" class="theme-btn" aria-label="Toggle Theme">
+          <i class="fa-solid fa-moon"></i>
+        </button>
         <div class="month-selector">
-          <button id="prev-month"><i class="fa-solid fa-chevron-left"></i></button>
+          <button id="prev-month" aria-label="Previous month"><i class="fa-solid fa-chevron-left"></i></button>
           <span id="current-month">March 2026</span>
-          <button id="next-month"><i class="fa-solid fa-chevron-right"></i></button>
+          <button id="next-month" aria-label="Next month"><i class="fa-solid fa-chevron-right"></i></button>
         </div>
         <button class="add-btn" id="open-modal">
           <i class="fa-solid fa-plus"></i>
@@ -112,7 +125,7 @@
             <h3>Recent Transactions</h3>
             <a href="#" class="see-all" data-view="transactions">See all</a>
           </div>
-          <ul id="recent-list" class="transaction-list">
+          <ul id="recent-list" class="transaction-list" aria-label="Recent transactions">
             <li class="empty-state"><i class="fa-solid fa-receipt"></i>
               <p>No transactions yet</p>
             </li>
@@ -137,10 +150,10 @@
     <!-- Transactions View -->
     <section class="view" id="view-transactions">
       <div class="transactions-toolbar">
-        <div class="filter-tabs">
-          <button class="filter-tab active" data-filter="all">All</button>
-          <button class="filter-tab" data-filter="income">Income</button>
-          <button class="filter-tab" data-filter="expense">Expense</button>
+        <div class="filter-tabs" role="tablist">
+          <button class="filter-tab active" data-filter="all" role="tab" aria-selected="true">All</button>
+          <button class="filter-tab" data-filter="income" role="tab" aria-selected="false">Income</button>
+          <button class="filter-tab" data-filter="expense" role="tab" aria-selected="false">Expense</button>
         </div>
         <div class="search-box">
           <i class="fa-solid fa-magnifying-glass"></i>
@@ -149,7 +162,19 @@
               class="fa-solid fa-xmark"></i></button>
         </div>
       </div>
-      <div id="transactions-container">
+      <div class="date-range-bar">
+        <div class="date-range-inputs">
+          <label>From</label>
+          <input type="date" id="date-from" onchange="applyDateRange()">
+          <label>To</label>
+          <input type="date" id="date-to" onchange="applyDateRange()">
+          <button class="date-range-clear" onclick="clearDateRange()">Clear</button>
+        </div>
+        <button class="export-btn" onclick="exportCSV()">
+          <i class="fa-solid fa-download"></i> Export CSV
+        </button>
+      </div>
+      <div id="transactions-container" aria-live="polite" aria-label="Transaction list">
         <div class="empty-state large"><i class="fa-solid fa-receipt"></i>
           <p>No transactions found</p>
         </div>
@@ -160,6 +185,15 @@
     <section class="view" id="view-budget">
       <p class="budget-subtitle">Set and track monthly spending limits per category</p>
       <div id="budget-grid" class="budget-grid"></div>
+    </section>
+
+    <!-- Settings View -->
+    <section class="view" id="view-settings">
+      <div class="settings-section">
+        <h3 class="settings-section-title">Currency</h3>
+        <p class="settings-section-desc">Choose your preferred display currency</p>
+        <div id="settings-currency-grid" class="settings-currency-grid"></div>
+      </div>
     </section>
 
     <!-- Reports View -->
@@ -184,10 +218,10 @@
 
   <!-- Add Transaction Modal -->
   <div class="modal-overlay" id="modal-overlay">
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div class="modal-header">
-        <h3>New Transaction</h3>
-        <button class="modal-close" id="close-modal"><i class="fa-solid fa-xmark"></i></button>
+        <h3 id="modal-title">New Transaction</h3>
+        <button class="modal-close" id="close-modal" aria-label="Close modal"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div class="type-toggle">
         <button class="type-btn expense-btn active" data-type="expense">
@@ -198,7 +232,7 @@
         </button>
       </div>
       <div class="amount-display">
-        <span class="amount-currency">$</span>
+        <span class="amount-currency" id="amount-currency-symbol">$</span>
         <input type="number" id="modal-amount" class="amount-input" placeholder="0.00" step="0.01" min="0">
       </div>
       <div class="modal-form-group">
@@ -218,6 +252,33 @@
   </div>
 
   <script src="app.js"></script>
+
+  <!-- Bottom nav for mobile -->
+  <nav class="bottom-nav" aria-label="Mobile navigation">
+    <a href="#" class="nav-item bottom-nav-item active" data-view="dashboard" aria-label="Dashboard">
+      <i class="fa-solid fa-house"></i><span>Dashboard</span>
+    </a>
+    <a href="#" class="nav-item bottom-nav-item" data-view="transactions" aria-label="Transactions">
+      <i class="fa-solid fa-list-ul"></i><span>Transactions</span>
+    </a>
+    <a href="#" class="nav-item bottom-nav-item" data-view="budget" aria-label="Budget">
+      <i class="fa-solid fa-bullseye"></i><span>Budget</span>
+    </a>
+    <a href="#" class="nav-item bottom-nav-item" data-view="reports" aria-label="Reports">
+      <i class="fa-solid fa-chart-bar"></i><span>Reports</span>
+    </a>
+    <a href="#" class="nav-item bottom-nav-item" data-view="settings" aria-label="Settings">
+      <i class="fa-solid fa-gear"></i><span>Settings</span>
+    </a>
+  </nav>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>
 </body>
 
 </html>
